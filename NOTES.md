@@ -37,11 +37,14 @@ Score = **geometric mean** of the per-shape speedup (cuBLAS_ms / ours_ms) over t
 | v1_regblock | 128×128 block, 8×8 reg tile, fp32 acc, SIMT | 0.2035x | 42.8 | all 5 shapes correct |
 | v2_wmma | 64×64 block, wmma 16×16×16 tensor cores, BK=32 | 0.5266x | 111.9 | all correct; small tile, no double-buffer |
 | v3_bigtile | 128×128 block, wmma, 128-bit vectorized loads, smem K-padding | 0.7803x | 166.6 | all correct; single-buffered |
-| v4 (next) | cp.async double-buffering (overlap global load with mma) | — | — | hide load latency |
+| v4_pipeline | v3 + cp.async double-buffering (cuda_pipeline intrinsics) | 0.8847x | 188.7 | all correct; ~88% of cuBLAS |
+| v5 (next) | push the wmma ceiling: BK=64 / 3-stage pipeline / vectorized bf16 epilogue | — | — | find where wmma plateaus, *then* drop to PTX |
 
-## Bottlenecks to attack next (v4+)
-- No pipelining → double-buffer shared tiles with `cp.async` to overlap global
-  loads with tensor-core math (likely the biggest remaining win).
-- Try larger K-step (BK=64) and/or 128×256 tile for more reuse.
-- Consider raw `mma.sync` + register-staged C to cut the shared store/convert cost.
-- Epilogue: vectorized bf16 stores instead of scalar per-element.
+## Plan: find the wmma ceiling, then PTX
+Strategy (per the week's task): squeeze the wmma path to its limit first, so the
+later jump to raw PTX (`mma.sync`/`ldmatrix`/`cp.async`) clearly demonstrates its
+value. Levers left on the wmma path:
+- larger K-step (BK=64) and/or 128×256 tile for more reuse / fewer syncs
+- 3-stage (triple-buffer) cp.async pipeline
+- vectorized bf16 epilogue (store 8 at a time) instead of scalar per-element
+Then: raw `mma.sync` + `ldmatrix` + register-staged C to break past the wmma ceiling.
