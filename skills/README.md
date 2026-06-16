@@ -1,14 +1,19 @@
-# skills/ — procedures the agent follows (markdown how-tos)
+# skills/ — Agent Skills (SKILL.md procedures)
 
-A **skill** here = a markdown procedure/playbook (a how-to prompt) the agent
-follows to accomplish a task; it calls `tools/` (executables) and reads `wiki/`
-(knowledge). **skill = do it · tool = run it · wiki = read it.**
+Each skill is a directory `<skill-name>/SKILL.md` in the standard Agent Skill
+format: YAML frontmatter (`name`, `description`) + a markdown procedure the agent
+follows. A skill calls `tools/` (executables) and reads `wiki/` (knowledge).
+**skill = follow it · tool = run it · wiki = read it.**
+
+> To make a skill actually invocable inside Claude Code it must live under
+> `.claude/skills/<name>/SKILL.md`; the copies here are the repo's curated source
+> of truth (symlink/copy into `.claude/skills/` to enable).
 
 ## Index
-| skill | what it does |
+| skill | description |
 |---|---|
-| `use-ptx-instruction.md` | turn an unfamiliar PTX instruction into a verified, working kernel + a wiki card |
+| `use-ptx-instruction/` | turn an unfamiliar PTX instruction into a verified, working kernel + a wiki card |
 
 ## Planned
-- `optimize-kernel.md` — the AVO loop: bench → find bottleneck (profile tool) →
-  pick the next lever → re-bench → keep best → stop on plateau.
+- `optimize-kernel/` — the AVO loop: bench → find bottleneck (profile tool) →
+  pick next lever → re-bench → keep best → stop on plateau.

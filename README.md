@@ -37,8 +37,8 @@ by the agent — and the substrate for the automated loop (`anvil`).
 ```
 tools/     executables the agent RUNS (input/output, structured result)
   bench.sh   deploy a kernel + okbench (compile + correctness vs cuBLAS + timing)
-skills/    procedures the agent FOLLOWS (markdown how-tos; call tools, read wiki)
-  use-ptx-instruction.md
+skills/    Agent Skills the agent FOLLOWS (each = <name>/SKILL.md, frontmatter + steps)
+  use-ptx-instruction/SKILL.md
 wiki/      knowledge the agent READS (KernelWiki) — verified facts, not doc dumps
   ptx/       per-instruction fact cards (layouts, gotchas, SM support)
 kernels/<op>/<variant>.cu   agent-authored kernels + a per-op README history
