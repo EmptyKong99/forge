@@ -1,7 +1,8 @@
-# forge — hand-written CUDA kernels (architecture B)
+# forge — hand-written CUDA kernels for OpenKernels (RTX 5090)
 
-Claude writes kernels here; the 5090 server only compiles/benchmarks them via okbench.
-This is separate from `anvil/` (the LLM-loop tool) — here the "generator" is Claude itself.
+Kernels are written by hand; the 5090 server only compiles/benchmarks them via
+okbench. Separate from `anvil` (which automates kernel generation with an LLM) —
+here the kernels are authored directly.
 
 ## Layout
 - `kernels/<variant>.cu` — kernel sources (one file per attempt)
@@ -17,7 +18,10 @@ This is separate from `anvil/` (the LLM-loop tool) — here the "generator" is C
 ## Target
 op `gemm_bf16_nt`: C = A[M,K] @ B[N,K]^T, BF16 in, fp32 accumulate, BF16 out.
 Reference = torch.matmul (cuBLAS) = 1.0x ≈ 210 TFLOPS on the suite.
-Suite shapes (required_5), all K=4096: M,N ∈ {4096,8192,16384}×{4096,8192}.
+Score = **geometric mean** of the per-shape speedup (cuBLAS_ms / ours_ms) over the
+5 fixed shapes in the `required_5` suite (all K=4096):
+1. square 4096×4096   2. tall 8192×4096   3. wide 4096×8192
+4. square 8192×8192   5. tall 16384×4096
 
 ## Results log
 | variant | approach | geomean vs cuBLAS | TFLOPS | notes |
