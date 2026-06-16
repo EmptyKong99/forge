@@ -30,8 +30,10 @@ Score = **geometric mean** of the per-shape speedup vs cuBLAS (`torch.matmul`,
 | **v4_pipeline** | + cp.async double-buffering | **0.8847×** | **188.7** |
 | v5_bk64 | BK=64, dynamic 72KB smem (experiment) | 0.8322× ↓ | 177.1 |
 | v6_epilogue | vectorized bf16 epilogue (no smem growth) | 0.8843× ≈ | 188.7 |
+| **v7_mma** | **raw PTX: `ldmatrix` + `mma.sync.m16n8k16`, register-resident C** | **0.9150×** | **195.1** |
 
-All variants pass correctness on all 5 shapes. **v4 ≈ v6 is the wmma champion.**
+All variants pass correctness on all 5 shapes. **v7 (raw PTX) breaks past the wmma
+ceiling** — see `skills/ptx-mma.md` for the recipe and the key gotcha.
 
 **Goal: meet / beat cuBLAS.** Strategy (this week's task): push the wmma path to
 its ceiling first, then drop to raw PTX so the PTX jump clearly demonstrates its
