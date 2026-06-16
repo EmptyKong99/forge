@@ -1,8 +1,9 @@
-# forge — hand-written CUDA kernels for OpenKernels (RTX 5090)
+# forge — kernels written by the agent (RTX 5090)
 
-Kernels are written by hand; the 5090 server only compiles/benchmarks them via
-okbench. Separate from `anvil` (which automates kernel generation with an LLM) —
-here the kernels are authored directly.
+Kernels here are authored by Claude (the coding agent) — the agent *is* the
+generator. The 5090 server only compiles/benchmarks them via okbench, and the
+agent reads the score and iterates. (`anvil` is the sister track where an LLM API
+is the generator instead.)
 
 ## Layout
 - `kernels/<variant>.cu` — kernel sources (one file per attempt)
