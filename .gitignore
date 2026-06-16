@@ -1,0 +1,6 @@
+# macOS
+.DS_Store
+
+# local scratch / fetched results (live on the server under gucheng)
+runs/
+*.json
