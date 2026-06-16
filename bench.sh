@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Architecture-B eval helper — run ON the 5090 server.
+# okbench eval helper — run ON the 5090 server.
 #
 #   bench.sh <variant> [device]
 #
