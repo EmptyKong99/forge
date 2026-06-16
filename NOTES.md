@@ -29,10 +29,12 @@ Score = **geometric mean** of the per-shape speedup (cuBLAS_ms / ours_ms) over t
 | (baseline) | naive 16×16 tiled (anvil smoke) | 0.0296x | ~6 | correctness/plumbing only |
 | v1_regblock | 128×128 block, 8×8 reg tile, fp32 acc, SIMT | 0.2035x | 42.8 | all 5 shapes correct |
 | v2_wmma | 64×64 block, wmma 16×16×16 tensor cores, BK=32 | 0.5266x | 111.9 | all correct; small tile, no double-buffer |
-| v3 (next) | bigger tile + cp.async double-buffering + smem padding + vectorized loads | — | — | close the gap to cuBLAS |
+| v3_bigtile | 128×128 block, wmma, 128-bit vectorized loads, smem K-padding | 0.7803x | 166.6 | all correct; single-buffered |
+| v4 (next) | cp.async double-buffering (overlap global load with mma) | — | — | hide load latency |
 
-## Bottlenecks to attack next (v3+)
-- Small 64×64 tile → low arithmetic intensity / reuse. Go 128×128 (or 128×256).
-- Scalar global loads → use 128-bit vectorized loads (int4 = 8 bf16) + `cp.async`.
-- No pipelining → double-buffer shared tiles to overlap load with mma.
-- wmma shared loads likely bank-conflicted → pad shared leading dim (BK+8).
+## Bottlenecks to attack next (v4+)
+- No pipelining → double-buffer shared tiles with `cp.async` to overlap global
+  loads with tensor-core math (likely the biggest remaining win).
+- Try larger K-step (BK=64) and/or 128×256 tile for more reuse.
+- Consider raw `mma.sync` + register-staged C to cut the shared store/convert cost.
+- Epilogue: vectorized bf16 stores instead of scalar per-element.
