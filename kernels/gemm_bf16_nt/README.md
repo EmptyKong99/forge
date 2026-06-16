@@ -60,7 +60,7 @@ registers `mma.sync` expects, accumulators stay in registers (no shared round-tr
 and the warp does 4×4 m16n8k16 mma tiles for its 64×32 output. Breaks past the wmma
 ceiling. **Key gotcha (cost one bench):** B is already column-major K×N in shared, so
 load it with **non-trans** `ldmatrix` — `.trans` runs fast but is *wrong*. okbench's
-correctness check caught it. See `../../skills/ptx-mma.md`.
+correctness check caught it. See `../../wiki/ptx/mma-m16n8k16.md`.
 
 ### v8_pipe — software-pipelined fragment loads — 0.9245× (196.9) ← champion
 Same instructions/layouts as v7, but load the `ldmatrix` fragments for *both*
