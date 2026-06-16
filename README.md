@@ -29,14 +29,19 @@ Score = **geometric mean** of the per-shape speedup vs cuBLAS (`torch.matmul`,
 | v3_bigtile | 128×128 + 128-bit vectorized loads + smem K-padding | 0.7803× | 166.6 |
 | **v4_pipeline** | + cp.async double-buffering | **0.8847×** | **188.7** |
 | v5_bk64 | BK=64, dynamic 72KB smem (experiment) | 0.8322× ↓ | 177.1 |
+| v6_epilogue | vectorized bf16 epilogue (no smem growth) | 0.8843× ≈ | 188.7 |
 
-All variants pass correctness on all 5 shapes. **v4 is the wmma champion.**
+All variants pass correctness on all 5 shapes. **v4 ≈ v6 is the wmma champion.**
 
 **Goal: meet / beat cuBLAS.** Strategy (this week's task): push the wmma path to
 its ceiling first, then drop to raw PTX so the PTX jump clearly demonstrates its
-value. Finding: the wmma path **plateaus around 0.88×** — v5's BK=64 enlarged
-shared memory to 72KB, which dropped occupancy to 1 block/SM and *regressed* to
-0.83×. So the next real gain has to come from **raw PTX**: `ldmatrix` +
+value. **Finding: the wmma path firmly plateaus at ~0.88×.** Three levers tried
+beyond v4, none helped:
+- v5 BK=64 → 72KB smem → occupancy 1 block/SM → 0.83× (regress)
+- `__launch_bounds__(256,2)` occupancy hint → register spills → 0.85× (regress)
+- vectorized bf16 epilogue (v6) → 0.884× (neutral; epilogue is a tiny fraction)
+
+So the next real gain must come from **raw PTX**: `ldmatrix` +
 `mma.sync.m16n8k16` with register-staged accumulators (fewer shared round-trips
 and tighter scheduling than the wmma wrappers). PTX know-how → `skills/`.
 
