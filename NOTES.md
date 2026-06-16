@@ -6,14 +6,14 @@ agent reads the score and iterates. (`anvil` is the sister track where an LLM AP
 is the generator instead.)
 
 ## Layout
-- `kernels/<variant>.cu` — kernel sources (one file per attempt)
-- `bench.sh` — deploy + run okbench + print summary (runs on the server)
-- `runs/<variant>.json` — okbench result JSONs (on the server, under gucheng)
+- `kernels/<op>/<variant>.cu` — kernel sources (one file per attempt)
+- `bench.sh <op> <variant> [device]` — deploy + run okbench + print summary (on the server)
+- `runs/<op>__<variant>.json` — okbench result JSONs (kept on the server)
 
 ## Workflow (one iteration)
-1. write/edit `kernels/<variant>.cu` on the Mac
-2. `scp` it to the server's `forge/kernels/`
-3. `ssh server 'bash /nvme/share/gucheng/forge/bench.sh <variant> <device>'`
+1. write/edit `kernels/<op>/<variant>.cu`
+2. `scp` it to the server's `forge/kernels/<op>/`
+3. `ssh <server> 'bash <forge-dir>/bench.sh <op> <variant> <device>'`
 4. read the geomean / per-shape speedup, decide the next change
 
 ## Target
@@ -21,8 +21,14 @@ op `gemm_bf16_nt`: C = A[M,K] @ B[N,K]^T, BF16 in, fp32 accumulate, BF16 out.
 Reference = torch.matmul (cuBLAS) = 1.0x ≈ 210 TFLOPS on the suite.
 Score = **geometric mean** of the per-shape speedup (cuBLAS_ms / ours_ms) over the
 5 fixed shapes in the `required_5` suite (all K=4096):
-1. square 4096×4096   2. tall 8192×4096   3. wide 4096×8192
-4. square 8192×8192   5. tall 16384×4096
+
+| shape | M | N |
+|---|---|---|
+| square | 4096 | 4096 |
+| tall | 8192 | 4096 |
+| wide | 4096 | 8192 |
+| square | 8192 | 8192 |
+| tall | 16384 | 4096 |
 
 ## Results log
 | variant | approach | geomean vs cuBLAS | TFLOPS | notes |

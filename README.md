@@ -19,7 +19,7 @@ all 5 suite shapes correct. Progression: 0.03 → 0.20 → 0.53 → 0.78 (see `N
 - `kernels/<op>/<variant>.cu` — agent-authored kernels (pure CUDA / inline PTX)
 - `bench.sh <op> <variant> [device]` — deploy into the OpenKernels submission tree,
   run okbench (compile + correctness + timing on real hardware), print the score
-- `runs/<op>__<variant>.json` — okbench result JSONs (kept on the server, under gucheng)
+- `runs/<op>__<variant>.json` — okbench result JSONs (kept on the server)
 - `NOTES.md` — per-version results log + bottleneck analysis
 - `skills/` — distilled, reusable how-tos learned along the way (e.g. PTX mma usage)
 
@@ -39,7 +39,7 @@ is built so far.
 2. `scp` to the server, then `ssh server 'bash forge/bench.sh <op> <variant> <device>'`
 3. read the geomean score + per-shape numbers, decide the next change, commit & push
 
-## Setup it depends on (on the 5090 server, all under `/nvme/share/gucheng`)
+## Setup it depends on (on the GPU server, in the user's own work dir)
 - the OpenKernels repo (provides `okbench` + the op specs/reference)
-- a venv with torch (cu128, sm_120) — see the project notes
+- a venv with torch (cu128, sm_120)
 - nvcc 13, g++-12 host compiler
