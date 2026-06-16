@@ -8,24 +8,54 @@ generator**; the server only compiles and measures.
 (Sister project `anvil` automates the same loop with an LLM *API* as the
 generator. Here the generator is the agent driving the session directly.)
 
-## Status
-op `gemm_bf16_nt` (C = A @ Bᵀ, BF16, RTX 5090): **0.78× cuBLAS** (166.6 TFLOPS),
-all 5 suite shapes correct. Progression: 0.03 → 0.20 → 0.53 → 0.78 (see `NOTES.md`).
+## Results — `gemm_bf16_nt` (C = A @ Bᵀ, BF16, RTX 5090)
 
-**Goal: meet / beat cuBLAS** by dropping to PTX-level instructions
-(`mma.sync`, `ldmatrix`, `cp.async`); PTX know-how gets distilled into `skills/`.
+Score = **geometric mean** of the per-shape speedup vs cuBLAS (`torch.matmul`,
+≈ 210 TFLOPS = 1.0×) over the 5 fixed `required_5` shapes (all K=4096):
+
+| shape  | M | N |
+|---|---|---|
+| square | 4096 | 4096 |
+| tall   | 8192 | 4096 |
+| wide   | 4096 | 8192 |
+| square | 8192 | 8192 |
+| tall   | 16384 | 4096 |
+
+| variant | approach | geomean vs cuBLAS | TFLOPS |
+|---|---|---|---|
+| (baseline) | naive 16×16 tiled (anvil smoke) | 0.0296× | ~6 |
+| v1_regblock | 128×128 block, 8×8 register tile, SIMT fp32 acc | 0.2035× | 42.8 |
+| v2_wmma | 64×64 block, wmma 16×16×16 tensor cores | 0.5266× | 111.9 |
+| v3_bigtile | 128×128 + 128-bit vectorized loads + smem K-padding | 0.7803× | 166.6 |
+| **v4_pipeline** | + cp.async double-buffering | **0.8847×** | **188.7** |
+| v5_bk64 | BK=64, dynamic 72KB smem (experiment) | 0.8322× ↓ | 177.1 |
+
+All variants pass correctness on all 5 shapes. **v4 is the wmma champion.**
+
+**Goal: meet / beat cuBLAS.** Strategy (this week's task): push the wmma path to
+its ceiling first, then drop to raw PTX so the PTX jump clearly demonstrates its
+value. Finding: the wmma path **plateaus around 0.88×** — v5's BK=64 enlarged
+shared memory to 72KB, which dropped occupancy to 1 block/SM and *regressed* to
+0.83×. So the next real gain has to come from **raw PTX**: `ldmatrix` +
+`mma.sync.m16n8k16` with register-staged accumulators (fewer shared round-trips
+and tighter scheduling than the wmma wrappers). PTX know-how → `skills/`.
 
 ## How it works
 - `kernels/<op>/<variant>.cu` — agent-authored kernels (pure CUDA / inline PTX)
 - `bench.sh <op> <variant> [device]` — deploy into the OpenKernels submission tree,
   run okbench (compile + correctness + timing on real hardware), print the score
 - `runs/<op>__<variant>.json` — okbench result JSONs (kept on the server)
-- `NOTES.md` — per-version results log + bottleneck analysis
 - `skills/` — distilled, reusable how-tos learned along the way (e.g. PTX mma usage)
 
+### One iteration
+1. agent writes/edits `kernels/<op>/<variant>.cu`
+2. `scp` to the server, then `ssh <server> 'bash <forge-dir>/bench.sh <op> <variant> <device>'`
+3. read the geomean + per-shape numbers, decide the next change, commit & push
+
+Branches: `main` = stable milestones (tagged), `dev` = daily iteration.
+
 ## Generality (axes — current vs intended)
-The design is deliberately kept extensible along these axes; only the first column
-is built so far.
+Kept extensible along these axes; only the first column is built so far.
 
 | axis | now | intended |
 |---|---|---|
@@ -34,12 +64,6 @@ is built so far.
 | language | pure CUDA / PTX | + Triton, TileLang |
 | backend | `sm_120` (RTX 5090) | + `sm_100`, … |
 
-## One iteration
-1. agent writes/edits `kernels/<op>/<variant>.cu`
-2. `scp` to the server, then `ssh server 'bash forge/bench.sh <op> <variant> <device>'`
-3. read the geomean score + per-shape numbers, decide the next change, commit & push
-
-## Setup it depends on (on the GPU server, in the user's own work dir)
+## Depends on (on the GPU server, in the user's own work dir)
 - the OpenKernels repo (provides `okbench` + the op specs/reference)
-- a venv with torch (cu128, sm_120)
-- nvcc 13, g++-12 host compiler
+- a venv with torch (cu128, sm_120); nvcc 13, g++-12 host compiler
