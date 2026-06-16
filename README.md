@@ -35,20 +35,21 @@ by the agent — and the substrate for the automated loop (`anvil`).
 
 ## Layout
 ```
-skills/    agent-callable TOOLS (input/output, structured result)
-           bench.sh = deploy + okbench (compile + correctness vs cuBLAS + timing)
-wiki/      agent-read KNOWLEDGE (KernelWiki)
-  ptx/       per-instruction fact cards (verified, not doc dumps)
-  methods/   playbooks the agent follows (e.g. how to use a new PTX instruction)
+tools/     executables the agent RUNS (input/output, structured result)
+  bench.sh   deploy a kernel + okbench (compile + correctness vs cuBLAS + timing)
+skills/    procedures the agent FOLLOWS (markdown how-tos; call tools, read wiki)
+  use-ptx-instruction.md
+wiki/      knowledge the agent READS (KernelWiki) — verified facts, not doc dumps
+  ptx/       per-instruction fact cards (layouts, gotchas, SM support)
 kernels/<op>/<variant>.cu   agent-authored kernels + a per-op README history
 runs/      okbench result JSONs (on the server; gitignored)
 ```
-**skill = run it · wiki = read it.** Running a method (wiki) produces fact cards
-(wiki) and uses tools (skills); cards make the next iteration faster.
+**tool = run it · skill = follow it · wiki = read it.** Following a skill uses
+tools and reads/writes wiki cards; the cards make the next iteration faster.
 
 ## One iteration
 1. write/edit `kernels/<op>/<variant>.cu`
-2. `scp` to the server, then `ssh <server> 'bash <forge>/skills/bench.sh <op> <variant> <device>'`
+2. `scp` to the server, then `ssh <server> 'bash <forge>/tools/bench.sh <op> <variant> <device>'`
 3. read the geomean + per-shape numbers, decide the next change, commit & push
 
 Branches: `main` = stable tagged milestones, `dev` = daily iteration.
