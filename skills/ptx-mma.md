@@ -44,7 +44,20 @@ Don't trust the layout from memory — okbench checks every shape against cuBLAS
 v7 attempt 1 ran at 0.92× but `correct=False`; flipping B to non-trans fixed it
 with no speed loss. Write it, bench it, fix the layout from the pass/fail signal.
 
-## Next levers (not yet done)
-- `ldmatrix`-based or vectorized epilogue (still scalar register store).
-- software-pipeline the `ldmatrix` of the next k-substep with the current `mma`.
-- avoid shared bank conflicts feeding `ldmatrix` (swizzle instead of +8 pad).
+## Levers tried
+- **software-pipeline ldmatrix** (load both k-substeps' fragments, then issue all
+  mma) → 0.915×→**0.9245×**. Correct first try (same layouts, only reordered).
+- still open: vectorized/register epilogue; 3-stage cp.async pipeline (watch the
+  register/occupancy budget — v5 showed bigger smem regresses); swizzled shared to
+  kill `ldmatrix` bank conflicts instead of the +8 pad; wider warp tile.
+
+## Meta: how the PTX docs were actually used (and the honest gap)
+- The PTX ISA page is one giant HTML; a generic web-fetch could NOT pull the exact
+  fragment-layout tables (§9.7.15.5). So correctness leaned on (a) the *standard*,
+  stable sm_80+ layouts (the C/D accumulator map + ldmatrix addressing above) and
+  (b) **okbench's correctness check vs cuBLAS as the oracle** — write it, bench it,
+  fix the layout from pass/fail. That caught the `.trans` bug in one iteration.
+- Takeaway for the agentic loop: we need a **queryable PTX-doc tool** (the doc
+  distilled into retrievable per-instruction tables) so the generator can look up
+  exact layouts instead of relying on memory + trial. That tool is itself a
+  deliverable ("ptx document tools" on the roadmap).
