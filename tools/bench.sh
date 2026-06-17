@@ -14,7 +14,7 @@ set -euo pipefail
 
 OP="${1:?usage: bench.sh <op> <variant> [device]}"
 VARIANT="${2:?usage: bench.sh <op> <variant> [device]}"
-DEV="${3:-0}"
+DEV="${3:-6}"   # gucheng's lane on the shared box is GPU 6/7, not 0
 
 FORGE=/nvme/share/gucheng/forge
 REPO=/nvme/share/gucheng/OpenKernels
