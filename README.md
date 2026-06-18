@@ -37,6 +37,7 @@ by the agent — and the substrate for the automated loop (`anvil`).
 ```
 tools/     executables the agent RUNS (input/output, structured result)
   bench.sh   deploy a kernel + okbench (compile + correctness vs cuBLAS + timing)
+  okeval.py  deploy→okbench→parse (vendored copy of anvil's okeval, synced by hand)
 skills/    Agent Skills the agent FOLLOWS (each = <name>/SKILL.md, frontmatter + steps)
   use-ptx-instruction/SKILL.md
 wiki/      knowledge the agent READS (KernelWiki) — verified facts, not doc dumps
