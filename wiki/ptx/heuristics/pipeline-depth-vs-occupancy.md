@@ -22,6 +22,11 @@ Occupancy and pipeline depth pull against each other.
 - **v9** 3-stage = **0.8297×** ↓↓. Needed 60KB → dynamic shared → **1 block/SM**;
   *all* shapes dropped uniformly to ~0.81–0.87. The occupancy loss swamped the
   prefetch gain. Same wall as the earlier wmma `v5_bk64` (72KB → 1 block/SM).
+- **v15** 3-stage on the *swizzled* base (no pad, 48KB) = **0.8371×** ↓↓. Built to
+  test whether v9 only failed from padding bloat — it did **not**: same ~16pp
+  collapse even with the leaner tiles. **This is the strong evidence:** deep prefetch
+  is wrong for *this* (compute-bound, large-shape, sm_120) GEMM intrinsically, not
+  because of one version's shared budget. Don't keep re-trying depth here.
 
 ## ⚠️ Not "deep pipelines are bad"
 

@@ -141,7 +141,17 @@ force. **Lesson (→ `../../wiki/ptx/heuristics/block-rasterization-vs-l2.md`):*
 port CUTLASS-era scheduling tricks to a big-L2 consumer arch on faith. v13 stays
 champion.
 
-### The tile/pipeline levers stay regime-conditional (v9/v10/v11/v14 are not "failed")
+### v15_stage3sw — 3-stage pipeline on the swizzled base — 0.8371× ↓↓ (regression, confirms v9)
+PTX route. The hypothesis: v9's 3-stage died from v8's *padded* 60KB tiles (→1
+block/SM); v13's swizzle cut tiles to 32KB, so 3 stages = 48KB dynamic + 2KB Cs =
+50KB should keep 2 blocks/SM. **Benched 0.8371×** — same ~16pp collapse as v9, all
+shapes (square_4096 1.0257→0.8814). So removing the padding confound did **not**
+save it: deep prefetch is genuinely wrong for this compute-bound large-shape GEMM on
+sm_120, not merely "too much shared." Strengthens
+`../../wiki/ptx/heuristics/pipeline-depth-vs-occupancy.md`. **v13 is the final
+champion.**
+
+### The tile/pipeline levers stay regime-conditional (v9/v10/v11/v14/v15 are not "failed")
 `required_5` is **entirely large, big-K matrices** — a biased sample that rewards
 big tiles + shallow pipelines. v12's win was orthogonal (epilogue, not the inner
 loop); the *tile/pipeline* branches still lose here, each for a mechanism that
