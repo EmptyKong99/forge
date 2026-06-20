@@ -108,13 +108,27 @@ reuse" holds here. **Meta-lesson:** even a clean independent reviewer's confiden
 prediction was wrong by data — predictions (author's *or* reviewer's) are cheap;
 okbench is the only truth.
 
-### Verdict: v8 (0.9245×) is a robust local optimum
-Three post-v8 levers all regressed — v9 (+shared → occupancy cliff), v10 (−pad →
-bank conflicts), v11 (−tile → arithmetic-intensity collapse). On sm_120 the dominant
-force for this GEMM is **arithmetic intensity / reuse**; v8's 128×128 padded
-double-buffer balances it, and every "obvious" next lever trades away the thing that
-matters. The only untried lever that keeps the tile size is a **proper XOR swizzle**
-(occupancy-neutral, shaves `ldmatrix` bank conflicts; maybe 3–8%) — hard, uncertain.
-cuBLAS's last ~8% is near-optimal hand-tuned SASS; matching it is brutal and likely
-not worth more flailing. **The deliverable here is the ladder + the three
-failed-branch lessons + the meta-lesson, not one more percent.**
+### v8 (0.9245×) wins *this shape set* — the post-v8 levers are regime-conditional
+v8 is the champion on okbench `required_5`, but `required_5` is **entirely large,
+big-K matrices** — a biased sample that rewards big tiles + shallow pipelines. So
+v9/v10/v11 are **not "failed techniques"**; each loses *here* for a mechanism that
+predicts where it would *win*:
+
+- **v9** (+shared → occupancy cliff) — loses on big-shared-bound shapes; deep
+  pipelines win when **latency-bound** or on big-shared archs (Hopper/TMA).
+- **v10** (−pad → bank conflicts) — the conflict cure that's occupancy-neutral is
+  **XOR swizzle**, not just dropping the pad.
+- **v11** (−tile → arithmetic-intensity collapse) — small tiles win on **skinny /
+  small / batched** GEMMs, the regime okbench doesn't sample.
+
+These three lessons are banked as **regime→technique heuristic cards**, not verdicts:
+- `../../wiki/ptx/heuristics/tile-size-vs-shape.md`
+- `../../wiki/ptx/heuristics/pipeline-depth-vs-occupancy.md`
+- `../../wiki/ptx/heuristics/padding-vs-swizzle.md`
+
+On *this* shape set the dominant force is **arithmetic intensity / reuse**, and v8's
+128×128 padded double-buffer balances it. The one untried lever that keeps the tile
+is a **proper XOR swizzle** (occupancy-neutral; maybe 3–8%, unbenched). cuBLAS's last
+~8% is hand-tuned SASS. **Meta-lesson:** every confident prediction here — author's
+*and* an independent reviewer's — was falsified by data at least once; okbench is the
+only arbiter, and a "winner" is always *winner-for-this-distribution*.

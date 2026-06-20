@@ -10,20 +10,24 @@ A procedure the agent follows. It calls `tools/` (executables) and reads/writes
 
 ## Procedure
 
-1. **Scope** — pick only the instructions this kernel needs; don't read the whole
-   PTX chapter.
+1. **Scope** — pick the ONE instruction to verify now. (For the breadth question
+   "what instructions even exist for my target SM?" run `survey-ptx-knowledge`
+   first; it produces the `wiki/ptx/menu/` map you pick from. This skill verifies
+   one menu entry into a fact.)
 2. **Syntax + SM support** — get the per-instruction syntax line and SM-support
    table (these are regular/parseable); confirm the target arch (e.g. `sm_120`) is
    listed.
 3. **Layout (the dangerous part)** — do NOT trust plain-text extraction of the
-   fragment/register tables. Prefer a verified `wiki/ptx/*` card; if none exists,
-   derive from the instruction family and mark it **unverified**.
+   fragment/register tables (nor the `menu/` cards, which are UNVERIFIED). Prefer a
+   verified `wiki/ptx/facts/*` card; if none exists, derive from the instruction
+   family and mark it **unverified**.
 4. **Write a minimal kernel; benchmark it** with `tools/bench.sh <op> <variant>` —
    correctness is checked against cuBLAS by okbench.
 5. **If fast but wrong → it's a layout bug.** Flip ONE variable at a time
    (trans/no-trans, operand order, addressing offset) and re-bench.
-6. **Once correct → write/update a `wiki/ptx/` card** (syntax + verified layout +
-   the gotcha that bit you + SM support).
+6. **Once correct → write/update a `wiki/ptx/facts/` card** (syntax + verified
+   layout + the gotcha that bit you + SM support). If the sweep also taught you a
+   *when-to-use* lesson across variants, that goes to `distill-heuristic`, not here.
 
 Feedback loop: each run adds cards, so step 3 increasingly hits a verified card
 instead of trial-and-error.
@@ -41,7 +45,7 @@ The PTX ISA page is one giant HTML and the exact fragment-layout tables
 (§9.7.15.5) don't survive a generic fetch — but the fix is **not** to build a
 PTX-doc extraction tool. The methodology is **practice-first**: write the kernel,
 let okbench verify it, then distill what you learned (syntax + the layout that
-*actually worked* + the gotcha that bit you) into a `wiki/ptx/` card carrying
+*actually worked* + the gotcha that bit you) into a `wiki/ptx/facts/` card carrying
 **provenance** (which kernel/measurement backs it). The doc is raw material; the
-verified card — e.g. `wiki/ptx/mma-m16n8k16.md`, backed by v7/v8 on the 5090 — is
-the deliverable.
+verified card — e.g. `wiki/ptx/facts/mma-m16n8k16.md`, backed by v7/v8 on the 5090 —
+is the deliverable.
