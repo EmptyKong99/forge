@@ -9,7 +9,8 @@ loads. The chosen one must be verified into `facts/` before trust.
   Simple, costs shared. **Verified in use** (v8 `BKP=BK+8`).
 - **XOR swizzle** — permute each row's column index by XOR-ing in some row bits,
   so the same access pattern spreads across banks with *zero* padding. Occupancy-
-  neutral. **Not yet implemented in forge** — the open lever for gemm v12.
+  neutral. **VERIFIED + champion** (gemm v13, 0.99×, beats cuBLAS on square_4096) →
+  exact working function in `../facts/smem-swizzle.md`.
 - Choice between them is a judgment → `[[padding-vs-swizzle]]`.
 
 ## Matrix descriptors (sm_90+ wgmma/TMA) — UNVERIFIED, off-target

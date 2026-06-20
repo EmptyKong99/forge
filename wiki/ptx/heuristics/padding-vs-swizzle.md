@@ -11,7 +11,7 @@ Two cures:
 | Technique | What it costs | When it's right |
 |---|---|---|
 | **Padding** (`BKP = BK + 8`) | extra shared per tile → can lower occupancy | simplest; good default when shared budget is loose. Used by v8 (`BKP=40`) |
-| **XOR swizzle** (permute the smem column by `row^col` bits) | zero extra shared, some index arithmetic | when shared is tight and you need occupancy *and* no conflicts — the only conflict cure that is **occupancy-neutral** |
+| **XOR swizzle** (permute the smem column by `row` bits) | zero extra shared, some index arithmetic | **the winner here (v13, 0.99×)** — occupancy-neutral conflict cure; use when shared is tight and you need occupancy *and* no conflicts |
 | **Neither** (raw `BK` stride) | bank conflicts | almost never on these access patterns — see v10 |
 
 ## The evidence
@@ -23,14 +23,16 @@ Two cures:
   path the `+8` pad is doing real work — you cannot just shrink shared for
   occupancy and expect to win.
 
-## The untried lever (honest unknown)
+## The swizzle lever — RESOLVED (v13, it won)
 
-A **proper XOR swizzle** is the one move that keeps v8's tile size *and* buys
-occupancy *and* removes conflicts — it's the theoretically-correct successor to
-both v9 (occupancy) and v10 (conflicts). Estimated 3–8%, **unbenched**, hard to
-get right (the swizzle must be consistent between the cp.async store and the
-ldmatrix load). Treat the estimate as a prediction, i.e. cheap and possibly wrong
-— see the meta-note below.
+The **XOR swizzle** was the one move that keeps the tile size *and* buys occupancy
+*and* removes conflicts — the successor to both v9 (occupancy) and v10 (conflicts).
+It was predicted "3–8%, unbenched." **v13 benched it: +3pp (v12 0.96 → v13 0.99),
+correct on the first try, square_4096 over cuBLAS.** So for *this* GEMM the ranking
+is: **swizzle > padding > nothing**. The exact working swizzle + the (silent-wrong)
+gotcha are now a fact: `../facts/smem-swizzle.md`. Note the prediction's *direction*
+was right but it's still just luck until benched — v11's prediction was equally
+confident and wrong.
 
 ## Meta-note (the recurring lesson across v9/v10/v11)
 Every confident prediction in this op — author's *and* an independent reviewer's —

@@ -19,7 +19,8 @@ Conflating them is how a kernel agent overfits one benchmark's shapes.
 
 ## Current contents
 - `ptx/facts/` — `mma-m16n8k16.md`, `cp-async.md`, `ldmatrix-family.md`,
-  `stmatrix.md` (backed by gemm_bf16_nt v4/v7/v8/v12 on RTX 5090 sm_120).
+  `stmatrix.md`, `smem-swizzle.md` (backed by gemm_bf16_nt v4/v7/v8/v12/v13 on
+  RTX 5090 sm_120; v13 hits 0.99×, over cuBLAS on square_4096).
 - `ptx/menu/` — `warp-matrix-mma.md`, `async-copy-model.md`,
   `smem-layout-swizzle.md` (swept from PTX ISA §9.7).
 - `ptx/heuristics/` — `tile-size-vs-shape.md`, `pipeline-depth-vs-occupancy.md`,

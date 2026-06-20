@@ -120,6 +120,17 @@ square_4096 hit **0.9978×** (≈ cuBLAS). Banked as fact
 `../../wiki/ptx/heuristics/epilogue-coalescing.md`. β≠0 keeps a scalar fallback
 (okbench scores β=0).
 
+### v13_swizzle — XOR-swizzled shared, no pad — 0.9900× (205 TFLOPS) ← champion, beats cuBLAS on square
+PTX route. v12 + the **missing half of v10**: drop the `+8` pad (shared 40→32KB =
+more occupancy) AND remove the resulting `ldmatrix` bank conflicts with an **XOR
+swizzle** (`phys_chunk = chunk ^ (row & 3)`), applied **identically** in the
+cp.async store and the ldmatrix load. Correct on the **first** bench; +3pp over v12
+and **square_4096 = 1.0257× — over cuBLAS.** Resolves the long-standing "untried
+swizzle lever (maybe 3–8%, unbenched)" — it was real. The swizzle is the occupancy-
+neutral conflict cure v9 (occupancy) and v10 (conflicts) each only got half of.
+Banked: `../../wiki/ptx/facts/smem-swizzle.md` (exact working swz + the must-match
+gotcha) + updated `../../wiki/ptx/heuristics/padding-vs-swizzle.md`.
+
 ### The tile/pipeline levers stay regime-conditional (v9/v10/v11 are not "failed")
 `required_5` is **entirely large, big-K matrices** — a biased sample that rewards
 big tiles + shallow pipelines. v12's win was orthogonal (epilogue, not the inner
