@@ -33,10 +33,11 @@ ldmatrix.sync.aligned.m8n8.x4.shared.b16 {r0,r1,r2,r3}, [addr];  // 4 tiles
 `.trans` compiles and runs at full speed even when wrong — only the *numbers* are
 wrong. okbench's per-shape correctness check is what catches it; speed won't.
 
-## `stmatrix` (the store counterpart) — UNVERIFIED
-`stmatrix.sync.aligned.m8n8.{x1,x2,x4}.shared.b16` writes registers → shared. Not
-yet used in forge; would matter for an epilogue that re-tiles through shared. Treat
-as menu (`../menu/warp-matrix-mma.md`) until benched.
+## `stmatrix` (the store counterpart) — VERIFIED → see `stmatrix.md`
+`stmatrix.sync.aligned.m8n8.{x1,x2,x4}.shared.b16` writes registers → shared.
+Verified on sm_120 by gemm_bf16_nt v12 (coalesced epilogue, 0.9598×). Its register
+data layout matches the mma C-accumulator, so accumulators stmatrix directly with no
+shuffle. Full layout + gotchas: `stmatrix.md`.
 
 ## SM support
 sm_80+ → valid on sm_120.

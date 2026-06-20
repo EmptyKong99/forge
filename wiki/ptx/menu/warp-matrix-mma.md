@@ -32,7 +32,9 @@ pointer, not a trusted layout.
   load (see the trans gotcha in the facts card — fast but wrong if the data is
   already in the wanted major order).
 - `stmatrix` — the store counterpart (registers → shared); useful for epilogue
-  re-tiling / writing back through shared. x1/x2/x4, b16. **Not yet used in forge.**
+  re-tiling / writing back through shared. x1/x2/x4, b16. **VERIFIED on sm_120**
+  (gemm v12, coalesced epilogue 0.9598×) → `../facts/stmatrix.md`. Note: docs say
+  sm_80+ but it historically shipped sm_90 — the verify confirmed sm_120 has it.
 
 ## How to use this card
 1. Pick the shape/type your op needs from the space above.

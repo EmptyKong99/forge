@@ -108,10 +108,22 @@ reuse" holds here. **Meta-lesson:** even a clean independent reviewer's confiden
 prediction was wrong by data — predictions (author's *or* reviewer's) are cheap;
 okbench is the only truth.
 
-### v8 (0.9245×) wins *this shape set* — the post-v8 levers are regime-conditional
-v8 is the champion on okbench `required_5`, but `required_5` is **entirely large,
-big-K matrices** — a biased sample that rewards big tiles + shallow pipelines. So
-v9/v10/v11 are **not "failed techniques"**; each loses *here* for a mechanism that
+### v12_stmatrix — coalesced `stmatrix` epilogue — 0.9598× (198.6) ← champion
+PTX route. Replaces v8's scalar per-thread C stores (scattered → uncoalesced) with
+`stmatrix`: pack acc → shared in mma-fragment layout, then a **contiguous**
+shared→global copy = coalesced C writes. Picked from `menu/warp-matrix-mma.md` as
+the survey→use→distill loop's verify target (was stmatrix even on sm_120? **yes**).
+Correct on the **first** bench, +3.5pp over v8 — the epilogue wasn't "neutral"
+because C-write bandwidth is a real slice on large outputs (square_8192 C=128MB);
+square_4096 hit **0.9978×** (≈ cuBLAS). Banked as fact
+`../../wiki/ptx/facts/stmatrix.md` + heuristic
+`../../wiki/ptx/heuristics/epilogue-coalescing.md`. β≠0 keeps a scalar fallback
+(okbench scores β=0).
+
+### The tile/pipeline levers stay regime-conditional (v9/v10/v11 are not "failed")
+`required_5` is **entirely large, big-K matrices** — a biased sample that rewards
+big tiles + shallow pipelines. v12's win was orthogonal (epilogue, not the inner
+loop); the *tile/pipeline* branches still lose here, each for a mechanism that
 predicts where it would *win*:
 
 - **v9** (+shared → occupancy cliff) — loses on big-shared-bound shapes; deep
@@ -126,9 +138,11 @@ These three lessons are banked as **regime→technique heuristic cards**, not ve
 - `../../wiki/ptx/heuristics/pipeline-depth-vs-occupancy.md`
 - `../../wiki/ptx/heuristics/padding-vs-swizzle.md`
 
-On *this* shape set the dominant force is **arithmetic intensity / reuse**, and v8's
-128×128 padded double-buffer balances it. The one untried lever that keeps the tile
-is a **proper XOR swizzle** (occupancy-neutral; maybe 3–8%, unbenched). cuBLAS's last
-~8% is hand-tuned SASS. **Meta-lesson:** every confident prediction here — author's
-*and* an independent reviewer's — was falsified by data at least once; okbench is the
-only arbiter, and a "winner" is always *winner-for-this-distribution*.
+On *this* shape set the dominant force for the inner loop is **arithmetic intensity
+/ reuse**, and v8/v12's 128×128 padded double-buffer balances it. The one untried
+inner-loop lever that keeps the tile is a **proper XOR swizzle** (occupancy-neutral;
+maybe 3–8%, unbenched). cuBLAS's last ~4% is hand-tuned SASS. **Meta-lesson:** every
+confident prediction here — author's *and* an independent reviewer's — was falsified
+by data at least once (v11 predicted 0.93×, got 0.70×; v12's epilogue predicted
+"neutral", got +3.5pp). okbench is the only arbiter, and a "winner" is always
+*winner-for-this-distribution*.

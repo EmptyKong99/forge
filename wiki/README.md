@@ -18,12 +18,18 @@ it flips with the workload, so it must carry its flip-condition, never a verdict
 Conflating them is how a kernel agent overfits one benchmark's shapes.
 
 ## Current contents
-- `ptx/facts/` — `mma-m16n8k16.md`, `cp-async.md`, `ldmatrix-family.md`
-  (backed by gemm_bf16_nt v4/v7/v8 on RTX 5090 sm_120).
+- `ptx/facts/` — `mma-m16n8k16.md`, `cp-async.md`, `ldmatrix-family.md`,
+  `stmatrix.md` (backed by gemm_bf16_nt v4/v7/v8/v12 on RTX 5090 sm_120).
 - `ptx/menu/` — `warp-matrix-mma.md`, `async-copy-model.md`,
   `smem-layout-swizzle.md` (swept from PTX ISA §9.7).
 - `ptx/heuristics/` — `tile-size-vs-shape.md`, `pipeline-depth-vs-occupancy.md`,
-  `padding-vs-swizzle.md` (distilled from gemm v8 vs v9/v10/v11).
+  `padding-vs-swizzle.md`, `epilogue-coalescing.md` (distilled from gemm v8 vs
+  v9/v10/v11/v12).
+
+The `stmatrix.md` fact + `epilogue-coalescing.md` heuristic are the output of one
+full **survey→use→distill** loop: stmatrix was an UNVERIFIED `menu/` entry → wrote
+gemm v12 to use it → okbench verified it (correct, 0.9598×, new champion) → distilled
+the layout (fact) and the when-to-coalesce judgment (heuristic). The loop closes.
 
 (Procedures live in `skills/`, not here — *how to* survey/verify/distill is a skill;
 the *cards* they produce land here.)
