@@ -35,9 +35,13 @@ confirmation**, not doc alone. `tools/bench.sh`'s per-shape check vs cuBLAS is t
 oracle — write it, bench it, fix from pass/fail. (This caught a B `.trans` bug in
 one iteration, with no speed loss.)
 
-## Honest gap → a deliverable
+## The deliverable is the verified card — not a doc tool
 
-The PTX ISA page is one giant HTML; a generic fetch can't pull the exact
-fragment-layout tables (§9.7.15.5). We need a queryable PTX-doc tool (`tools/`,
-roadmap) that distills the doc into retrievable per-instruction records. Until then
-the verified `wiki/ptx/` cards are the substitute.
+The PTX ISA page is one giant HTML and the exact fragment-layout tables
+(§9.7.15.5) don't survive a generic fetch — but the fix is **not** to build a
+PTX-doc extraction tool. The methodology is **practice-first**: write the kernel,
+let okbench verify it, then distill what you learned (syntax + the layout that
+*actually worked* + the gotcha that bit you) into a `wiki/ptx/` card carrying
+**provenance** (which kernel/measurement backs it). The doc is raw material; the
+verified card — e.g. `wiki/ptx/mma-m16n8k16.md`, backed by v7/v8 on the 5090 — is
+the deliverable.
