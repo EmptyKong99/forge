@@ -131,7 +131,17 @@ neutral conflict cure v9 (occupancy) and v10 (conflicts) each only got half of.
 Banked: `../../wiki/ptx/facts/smem-swizzle.md` (exact working swz + the must-match
 gotcha) + updated `../../wiki/ptx/heuristics/padding-vs-swizzle.md`.
 
-### The tile/pipeline levers stay regime-conditional (v9/v10/v11 are not "failed")
+### v14_raster — L2 threadblock rasterization — 0.9716× ↓ (regression, dead branch on sm_120)
+PTX route. v13 + remap linear bid → GROUP-tall column strips so concurrent CTAs
+share B columns in L2 (classic CUTLASS trick). Swept GROUP ∈ {4,8,16,32}: **all
+regress** (0.968–0.972×). Regressed *uniformly incl. compute-bound square_4096*
+(1.0257→1.0062) → the drop is **pure remap overhead**, the L2-reuse benefit is
+absent: the 5090's large L2 already captures the reuse rasterization exists to
+force. **Lesson (→ `../../wiki/ptx/heuristics/block-rasterization-vs-l2.md`):** don't
+port CUTLASS-era scheduling tricks to a big-L2 consumer arch on faith. v13 stays
+champion.
+
+### The tile/pipeline levers stay regime-conditional (v9/v10/v11/v14 are not "failed")
 `required_5` is **entirely large, big-K matrices** — a biased sample that rewards
 big tiles + shallow pipelines. v12's win was orthogonal (epilogue, not the inner
 loop); the *tile/pipeline* branches still lose here, each for a mechanism that
