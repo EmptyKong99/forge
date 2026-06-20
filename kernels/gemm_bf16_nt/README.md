@@ -93,9 +93,28 @@ v5's BK=64.** Correct, but a clear regression. **Lesson (→ skill card):** on s
 deeper pipeline / bigger shared trades occupancy for reuse and *loses*; the next
 lever must be **occupancy-neutral** (swizzle, register reduction), not more shared.
 
-### Remaining gap to cuBLAS (~0.92× → 1.0×)
-Bigger shapes (8192²) sit lower (~0.91×) than small ones (~0.96×) → still some
-tensor-core feeding stalls. Likely next levers: deeper (3-stage) cp.async pipeline
-within the register budget, swizzled shared layout to kill `ldmatrix` bank
-conflicts, and a wider warp tile. Diminishing returns; matching cuBLAS on every
-shape is hard.
+### v10_nopad — drop the BK padding (BKP 40→32) — 0.8997× ↓ (regression)
+PTX route, occupancy probe. Less shared (32KB → maybe 3 blocks/SM), but no padding
+reintroduces `ldmatrix` bank conflicts that cost MORE than the occupancy gained
+(all shapes drop ~3pp). **Lesson:** the `+8` pad is doing real work on the raw-PTX
+path too — you can't just shrink shared for occupancy.
+
+### v11_smalltile — 128×64 tile + 3-stage pipeline — 0.6954× ↓↓↓ (worst)
+PTX route. An **independent fresh-context reviewer's top pick**: shrink the block so
+`acc[4][2]`=32 regs and a 3-stage pipeline fits at 2 blocks/SM. Predicted 0.93–0.95×.
+Benched **0.70×** — the smaller N-tile crushed **arithmetic intensity** (B re-loaded
+by far more blocks), which dominates the occupancy gain. v3/v5's "bigger tile = more
+reuse" holds here. **Meta-lesson:** even a clean independent reviewer's confident
+prediction was wrong by data — predictions (author's *or* reviewer's) are cheap;
+okbench is the only truth.
+
+### Verdict: v8 (0.9245×) is a robust local optimum
+Three post-v8 levers all regressed — v9 (+shared → occupancy cliff), v10 (−pad →
+bank conflicts), v11 (−tile → arithmetic-intensity collapse). On sm_120 the dominant
+force for this GEMM is **arithmetic intensity / reuse**; v8's 128×128 padded
+double-buffer balances it, and every "obvious" next lever trades away the thing that
+matters. The only untried lever that keeps the tile size is a **proper XOR swizzle**
+(occupancy-neutral, shaves `ldmatrix` bank conflicts; maybe 3–8%) — hard, uncertain.
+cuBLAS's last ~8% is near-optimal hand-tuned SASS; matching it is brutal and likely
+not worth more flailing. **The deliverable here is the ladder + the three
+failed-branch lessons + the meta-lesson, not one more percent.**
