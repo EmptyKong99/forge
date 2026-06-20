@@ -16,6 +16,22 @@ OpenKernelsGemmBF16NTArgs*, cudaStream_t)`; args carry pointers, m/n/k, the six
 strides, alpha, beta. Unsupported shapes/layouts may return `cudaErrorNotSupported`
 (we require M,N%tile==0, K%BK==0, contiguous-k for the fast paths).
 
+## Two routes (split for finding the limit + distilling skills)
+
+The ladder forks at v6 into two optimization *paradigms*, each pushed to its own
+ceiling (a single linear chain commits you to one path):
+
+- **wmma route** — v1→v6, `nvcuda::wmma` wrappers. **Firmly plateaus ~0.88×** (v5/v6
+  proved it). Squeezing it further (swizzle/occupancy) is diminishing; kept as the
+  clean per-technique distillation spine.
+- **PTX route** — v7→…, raw `ldmatrix`+`mma.sync`. Broke past wmma to 0.92×; this is
+  where the remaining headroom is. New work lives here (`v9+`), branches off v8.
+
+Caveat on "no-skill vs skill": these two routes are **NOT** a clean ablation — the
+author's context already knows the PTX recipe, can't un-know it. The clean no-skill
+baseline is anvil/DeepSeek (EXP-001/002/003). Here the routes mean *wmma-limit vs
+PTX-limit*, both distilled into skills.
+
 ## Versions
 
 ### baseline — naive 16×16 tiled — 0.0296×
@@ -67,6 +83,15 @@ Same instructions/layouts as v7, but load the `ldmatrix` fragments for *both*
 k-substeps up front, then issue all `mma` — giving the scheduler room to overlap
 load latency with tensor-core math. +0.01, correct on the first try (no layout
 change). Applied straight from `skills/ptx-mma.md`'s "next levers" list.
+
+### v9_stage3 — 3-stage cp.async pipeline — 0.8297× ↓↓ (regression, dead branch)
+PTX route. v8 + a 3rd in-flight K-tile (deeper prefetch) to hide global latency on
+big shapes. Needs 60KB shared (>48KB static cap) → moved As/Bs to dynamic shared →
+**1 block/SM, occupancy collapses**. All shapes drop uniformly to ~0.81–0.87 (vs v8's
+0.96 small / 0.91 big) — the occupancy loss swamps the prefetch gain. **Same wall as
+v5's BK=64.** Correct, but a clear regression. **Lesson (→ skill card):** on sm_120,
+deeper pipeline / bigger shared trades occupancy for reuse and *loses*; the next
+lever must be **occupancy-neutral** (swizzle, register reduction), not more shared.
 
 ### Remaining gap to cuBLAS (~0.92× → 1.0×)
 Bigger shapes (8192²) sit lower (~0.91×) than small ones (~0.96×) → still some
