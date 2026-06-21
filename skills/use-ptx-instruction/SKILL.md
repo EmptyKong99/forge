@@ -35,9 +35,20 @@ instead of trial-and-error.
 ## Correctness oracle
 
 Low-level layouts are error-prone to read; trust = **doc + empirical
-confirmation**, not doc alone. `tools/bench.sh`'s per-shape check vs cuBLAS is the
-oracle — write it, bench it, fix from pass/fail. (This caught a B `.trans` bug in
-one iteration, with no speed loss.)
+confirmation**, not doc alone. `tools/bench.sh`'s per-shape check vs the reference
+(cuBLAS for gemm) is the oracle — write it, bench it, fix from pass/fail. (This
+caught a B `.trans` bug in one iteration, with no speed loss.)
+
+### …but first check the gate is sound (the oracle can lie)
+A "fail" is only trustworthy if the gate's tolerance is. **The default reference
+gate can be wrong:** flash-attention's `allclose_vs_cudnn` uses atol=0.002, which is
+**below 1 bf16 ULP** (0.0156) — two *correct* bf16 kernels that sum the reduction in
+different orders disagree by ~1 ULP and the gate red-flags a correct kernel. Before
+trusting a fail: (1) is the tolerance ≥ 1 ULP at the output magnitude? (2) does the
+bench also expose an **fp32-ground-truth** gate (`sampled_vs_fp32_math_allclose`)?
+Judge correctness against fp32 math, not against another bf16 reference. If the gate
+is unsound, fix/flag it (anvil keys this per-op in `okbench_runner._CORRECT_FIELD_BY_OP`)
+— don't burn iterations "fixing" a kernel that was already correct.
 
 ## The deliverable is the verified card — not a doc tool
 

@@ -44,6 +44,20 @@ agent to overfit. Bank the **flip-condition** instead.
 - Every heuristic card MUST carry its flip-condition; a card with one row is a
   fact or a verdict, not a heuristic.
 
+## A different op is a regime too (the transfer axis)
+The most over-claimed regime row is **"another op."** Two classes of fact behave
+oppositely across ops, so the card must state which it is:
+- **Instruction facts** (`mma.sync`, `ldmatrix`, `cp.async`, the `.trans` layout) —
+  transfer cross-op **cleanly, first-try**. Proof: the gemm v8 mma/ldmatrix/cp.async
+  facts landed flash-attention v4 and v7 on the first attempt.
+- **Tuning facts** (swizzle-vs-padding, tile size, pipeline depth) — are
+  regime-specific, and **"different op" IS a regime**: they do not auto-transfer.
+  Proof: `padding-vs-swizzle` — swizzle is the gemm v13 champion lever, but on FA it
+  broke correctness *and* lost to padding. Same instruction set, opposite verdict.
+So: a tuning card must carry the row "**another op?** → re-derive, don't assume"; an
+instruction-fact card should note "transfers cross-op (verified on …)". Never let a
+tuning win earned on one op masquerade as a general rule.
+
 ## The line between this and the other skills
 - **survey** → what exists → `menu/`.
 - **use-ptx-instruction** → make one work → `facts/`.
