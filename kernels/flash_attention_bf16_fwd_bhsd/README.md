@@ -30,6 +30,18 @@ global traffic ~64×. **Bottleneck now:** still SIMT (scalar Q·K dot) and `acc[
 per thread → heavy register spills. **Next lever:** tensor cores (transfer the gemm
 `mma`/`ldmatrix` facts to QKᵀ and PV) + warp-level tiling to kill the spills.
 
+### v3_warp — warp-per-query, D split across lanes — 6.3× (0.063× cuDNN)
+v2's killers: `acc[128]` per thread (register spills) + 64 threads/block (low
+occupancy). v3: one **warp** per query, the 32 lanes split D (lane L owns dims
+`{L, L+32, L+64, L+96}` = 4 each) → `acc` is **4 regs/lane, no spill**; 256
+threads/block; the Q·K dot is a `__shfl_xor` warp reduction. +2.5× over v2.
+**Small shapes now competitive** (fa0 causal 13.1%, fa1 full 7.2%) — but the **big
+shapes drag** (s8192 = 3.4%): 8192 sequential keys × a per-key warp-reduce is the
+wall. **Lesson:** split the feature dim across the warp to kill per-thread `acc[D]`.
+Now beats the naive ladder *and* matches the anvil/DeepSeek agent's median (~7.7%,
+EXP-005) on the small shapes — but scalar per-key attention can't touch cuDNN on long
+sequences. **Next lever:** tensor cores (16 keys per `mma`, not one per warp-reduce).
+
 ### Gap to cuDNN
 cuDNN fuses the two matmuls on tensor cores with warp-specialized pipelines. We're at
 2.5%; the jump needs (1) tensor-core QKᵀ and PV, (2) the P=exp(S) fragment repacked
