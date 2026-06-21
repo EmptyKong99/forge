@@ -42,6 +42,21 @@ Now beats the naive ladder *and* matches the anvil/DeepSeek agent's median (~7.7
 EXP-005) on the small shapes — but scalar per-key attention can't touch cuDNN on long
 sequences. **Next lever:** tensor cores (16 keys per `mma`, not one per warp-reduce).
 
+### v4_mma — tensor-core QKᵀ and PV — 9.9× (0.099× cuDNN) ← champion
+The big jump: both matmuls on `mma.m16n8k16`. One warp owns 16 queries, loops key
+tiles of BN=16. **QKᵀ = NT gemm** (Q=A, K=B, both non-trans — the gemm v8 layout
+verbatim). **PV**: store V *transposed* in shared (`Vt[d][key]`) so it's B non-trans
+too; P (after softmax) is A. The two hard middles, both landed **first try**:
+(1) **row softmax inside the C-accumulator** — each query row's keys are split across
+a 4-lane group, reduced with `shfl_xor` (offsets 1,2); (2) **P repack** — write P
+(bf16) to shared, `ldmatrix` it back as the PV A-operand. +1.6× over v3, and the
+**big shapes finally move** (s8192 3.4%→7.3%, s4096→7.0%) because mma does 16 keys at
+once instead of one scalar warp-reduce. Correct under fp32 gate (sampled_max_abs
+≤0.003). **Beats the anvil/DeepSeek agent** (EXP-005 median 7.7%) — forge is now a
+real ceiling. **This is the hand-proof that the gemm PTX facts generalize to FA.**
+Still **1 warp/block (32 threads) = terrible occupancy** → v5 is multi-warp +
+cp.async + swizzle, lots of headroom.
+
 ### Gap to cuDNN
 cuDNN fuses the two matmuls on tensor cores with warp-specialized pipelines. We're at
 2.5%; the jump needs (1) tensor-core QKᵀ and PV, (2) the P=exp(S) fragment repacked

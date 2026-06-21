@@ -44,12 +44,27 @@ it; all our kernels pass it. Don't chase bit-matching cuDNN: it's closed, versio
 dependent, and matching another impl's rounding ≠ being correct. anvil judges FA by
 this field (`okbench_runner._CORRECT_FIELD_BY_OP`).
 
-## Tensor-core path (the open rung)
-QKᵀ and PV are both `mma.sync.m16n8k16.bf16` (the gemm facts apply directly). The FA-
-specific hard part: the first mma yields S in the **C-accumulator fragment layout**;
-you apply `exp` to it, then must **repack P (bf16) into the A-operand layout** for the
-second mma, all while carrying the online-softmax rescale per row. Not yet built
-(v2 is SIMT). This is where the gemm→FA primitive transfer is proven by hand.
+## Tensor-core path — VERIFIED (v4_mma, 9.9× cuDNN, first try)
+Both matmuls are `mma.sync.m16n8k16.bf16` and **map onto the gemm NT layout** — the
+gemm facts transfer directly:
+- **QKᵀ** is literally NT gemm: `S[q,k]=Σ_d Q[q,d]K[k,d]` → Q=A, K=B, **both
+  non-trans** (K[keys][d] row-major IS col-major [d,keys], exactly like gemm's B).
+- **PV** is NN, but **store V transposed in shared** (`Vt[d][key]`) → V is B non-trans
+  too; P is A. (Transposing at the shared-store avoids `ldmatrix.trans`.)
+
+Two FA-specific hard parts (both worked first try, see v4):
+1. **Row softmax inside the C-accumulator.** After QKᵀ, S sits in the m16n8 C-frag
+   (row=query `group=lane/4`, cols=keys spread across `lane%4`). Each query row's keys
+   are held by the **4-lane group** `{4g..4g+3}` → reduce max/sum with
+   `__shfl_xor_sync` offsets **1,2** (stays inside the group). The lane owns 2 rows
+   (`group`, `group+8`).
+2. **Repack P → A-operand.** P (=exp(S), bf16) is in the C-frag layout; the PV mma
+   wants it as an A operand. **Write P to shared `Ps[16][BN]`, `ldmatrix` it back.**
+   Carry the online-softmax rescale (`O *= corr` per row) before each PV accumulate.
+
+This is the concrete proof that gemm-derived PTX facts generalize across ops (cf.
+anvil EXP-005, where injecting them gave the agent a ~1.7× cross-op nudge — by hand
+they take FA from a 6.3× SIMT kernel to 9.9×). Open: occupancy (v4 is 1 warp/block).
 
 ## Cross-refs
 - fact: `mma-m16n8k16.md`, `ldmatrix-family.md`, `cp-async.md`, `smem-swizzle.md`
