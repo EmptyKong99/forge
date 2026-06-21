@@ -30,6 +30,21 @@ OKBENCH_BENCH_CMD = {
 }
 
 
+# op name -> the per-shape field to read as the correctness verdict, when the
+# op's DEFAULT `correct` field is an unsound gate. flash_attention's default
+# `allclose_vs_cudnn` uses atol=0.002 < 1 bf16 ULP (0.0156), so it red-flags
+# mathematically-correct kernels that merely sum the PV reduction in a different
+# block order than cuDNN. Judge against fp32 math instead. (Mirror of anvil's
+# okbench_runner._CORRECT_FIELD_BY_OP — keep the two in sync.)
+_CORRECT_FIELD_BY_OP = {
+    "flash_attention_bf16_fwd_bhsd": "sampled_vs_fp32_math_allclose",
+}
+
+
+def correct_field(op: str) -> str:
+    return _CORRECT_FIELD_BY_OP.get(op, "correct")
+
+
 def bench_cmd(op: str) -> str:
     try:
         return OKBENCH_BENCH_CMD[op]
@@ -198,13 +213,27 @@ def evaluate(repo: Path, op: str, variant: str, kernel_src: str, *,
 
 # --- summary (shared by the CLI; mirrors EvalResult parsing) ----------------
 
+def _shape_correct(s: dict, field: str):
+    """Verdict for one shape. For ops with an unsound default gate, read the
+    sound field out of the `correctness` sub-dict; fall back to top-level
+    `correct` if it's absent (older okbench json)."""
+    if field == "correct":
+        return s.get("correct")
+    cd = s.get("correctness") or {}
+    v = cd.get(field)
+    return v if v is not None else s.get("correct")
+
+
 def format_summary(result: dict) -> str:
     lines = []
     speedups = []
+    field = correct_field(result.get("op", ""))
+    if field != "correct":
+        lines.append(f"  (correctness gate: {field}, not the default)")
     for s in result.get("shapes", []):
         por = s.get("pure_over_reference")
         spd = (1.0 / por) if por else None
-        ok = s.get("correct")
+        ok = _shape_correct(s, field)
         if spd:
             speedups.append(spd)
             ms = s.get("pure_median_ms")
