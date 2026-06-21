@@ -87,6 +87,17 @@ were the wrong fix; pipelining is the right one). fp32-correct, fa0 hits 61.6%. 
 cp.async + `.trans` facts both transferred straight from gemm. **Lesson:** hide load
 latency by pipelining, not by enlarging the tile.
 
+### v8_swizzle — XOR swizzle, no pad — 54% ↓ + INCORRECT (failed branch)
+Tried the gemm v13 swizzle (drop padding, permute the 8-chunk by row bits). **Two
+problems:** (1) **broke correctness** — `ldmatrix.trans` reads the 8×8 transposed, but
+the swizzle was derived for non-trans access, so swizzle∘trans on V is wrong (fp32
+gate fails); (2) even setting that aside it's **slower** (54% vs v7's 56%) — v7's
+*padding* already kills the bank conflicts, so swizzle's cure is redundant and the
+no-pad occupancy gain is tiny while the swz arithmetic costs. **Lesson / nuance:**
+the *instruction* facts (mma, ldmatrix, cp.async, `.trans`) transferred from gemm
+cleanly and first-try; the *tuning* fact (swizzle-vs-padding) is **regime-specific
+and did NOT transfer** — padding is the right choice for this FA shape. v7 champion.
+
 ### Gap to cuDNN
 cuDNN fuses the two matmuls on tensor cores with warp-specialized pipelines. We're at
 2.5%; the jump needs (1) tensor-core QKᵀ and PV, (2) the P=exp(S) fragment repacked
