@@ -76,6 +76,17 @@ ladder** (v5_bk64/v9: bigger shared → occupancy cliff). v5 (BN=16) is the swee
 **Lesson:** don't grow the tile to cut overhead here; the real next lever is hiding
 load latency *without* more shared = **cp.async double-buffer** (v7).
 
+### v7_pipe — cp.async double-buffered K/V — 55.9% (0.559× cuDNN, 46 TFLOPS) ← champion
+v5's per-tile K/V load was synchronous (compute waits for it). v7 **double-buffers**:
+prefetch tile t+1 with `cp.async` while computing tile t → the loads hide behind the
+math. To make K/V cp.async-able they're now stored **contiguously** (`Ks/Vs[key][d]`);
+the PV B-operand therefore uses **`ldmatrix.trans`** on `Vs` (trans from `[key][d]` ==
+non-trans from v5's transposed `[d][key]` — the gemm `.trans` fact, **right first
+try**). **+1.7× over v5** — so the loads really were the wall (and bigger tiles, v6,
+were the wrong fix; pipelining is the right one). fp32-correct, fa0 hits 61.6%. The
+cp.async + `.trans` facts both transferred straight from gemm. **Lesson:** hide load
+latency by pipelining, not by enlarging the tile.
+
 ### Gap to cuDNN
 cuDNN fuses the two matmuls on tensor cores with warp-specialized pipelines. We're at
 2.5%; the jump needs (1) tensor-core QKᵀ and PV, (2) the P=exp(S) fragment repacked
