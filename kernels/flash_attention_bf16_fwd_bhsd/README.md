@@ -57,6 +57,16 @@ real ceiling. **This is the hand-proof that the gemm PTX facts generalize to FA.
 Still **1 warp/block (32 threads) = terrible occupancy** → v5 is multi-warp +
 cp.async + swizzle, lots of headroom.
 
+### v5_block — 4-warp block, shared K/V — 32.6× (0.326× cuDNN, 26 TFLOPS) ← champion
+v4 was 1 warp/block = shared-limited, awful occupancy. v5: a **block of 4 warps = 64
+queries**; K and Vᵀ load into shared **once per block**, reused by all 4 query-warps.
+Per-warp compute is byte-for-byte v4 — only Q/P index by warp, K/V are block-shared.
+**+3.3× over v4** (the biggest jump in the ladder): halves shared-per-query (2×
+occupancy) *and* gives 4 warps to hide load/ldmatrix/mma latency. fp32-correct on all
+5 shapes. Now ~33% of cuDNN — **4× the anvil/DeepSeek agent** (EXP-005 median 7.7%).
+**Lesson:** the occupancy/reuse structure (load once, share across warps) beats raw
+math tweaks — same instructions as v4, 3.3× faster.
+
 ### Gap to cuDNN
 cuDNN fuses the two matmuls on tensor cores with warp-specialized pipelines. We're at
 2.5%; the jump needs (1) tensor-core QKᵀ and PV, (2) the P=exp(S) fragment repacked
