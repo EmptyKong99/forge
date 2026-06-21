@@ -67,6 +67,15 @@ occupancy) *and* gives 4 warps to hide load/ldmatrix/mma latency. fp32-correct o
 **Lesson:** the occupancy/reuse structure (load once, share across warps) beats raw
 math tweaks — same instructions as v4, 3.3× faster.
 
+### v6_bigtile — larger key tile (BN 32/64) — 26.7% / 21.0% ↓ (regression)
+Hypothesis: bigger BN amortizes per-tile overhead (sync, softmax reduce, P round-trip)
+over more keys → fewer synchronous-load stalls. **Falsified:** BN=32 → 26.7%, BN=64 →
+21.0%, both **below v5's 32.6%** (BN=16). The extra shared (Ks/Vt/Ps all scale with BN)
+**drops occupancy**, and on sm_120 occupancy wins — the **exact same lever as the gemm
+ladder** (v5_bk64/v9: bigger shared → occupancy cliff). v5 (BN=16) is the sweet spot.
+**Lesson:** don't grow the tile to cut overhead here; the real next lever is hiding
+load latency *without* more shared = **cp.async double-buffer** (v7).
+
 ### Gap to cuDNN
 cuDNN fuses the two matmuls on tensor cores with warp-specialized pipelines. We're at
 2.5%; the jump needs (1) tensor-core QKᵀ and PV, (2) the P=exp(S) fragment repacked
