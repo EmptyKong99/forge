@@ -16,6 +16,22 @@ OpenKernelsGemmBF16NTArgs*, cudaStream_t)`; args carry pointers, m/n/k, the six
 strides, alpha, beta. Unsupported shapes/layouts may return `cudaErrorNotSupported`
 (we require M,N%tile==0, K%BK==0, contiguous-k for the fast paths).
 
+## Two routes (split for finding the limit + distilling skills)
+
+The ladder forks at v6 into two optimization *paradigms*, each pushed to its own
+ceiling (a single linear chain commits you to one path):
+
+- **wmma route** — v1→v6, `nvcuda::wmma` wrappers. **Firmly plateaus ~0.88×** (v5/v6
+  proved it). Squeezing it further (swizzle/occupancy) is diminishing; kept as the
+  clean per-technique distillation spine.
+- **PTX route** — v7→…, raw `ldmatrix`+`mma.sync`. Broke past wmma to 0.92×; this is
+  where the remaining headroom is. New work lives here (`v9+`), branches off v8.
+
+Caveat on "no-skill vs skill": these two routes are **NOT** a clean ablation — the
+author's context already knows the PTX recipe, can't un-know it. The clean no-skill
+baseline is anvil/DeepSeek (EXP-001/002/003). Here the routes mean *wmma-limit vs
+PTX-limit*, both distilled into skills.
+
 ## Versions
 
 ### baseline — naive 16×16 tiled — 0.0296×
@@ -68,9 +84,96 @@ k-substeps up front, then issue all `mma` — giving the scheduler room to overl
 load latency with tensor-core math. +0.01, correct on the first try (no layout
 change). Applied straight from `skills/ptx-mma.md`'s "next levers" list.
 
-### Remaining gap to cuBLAS (~0.92× → 1.0×)
-Bigger shapes (8192²) sit lower (~0.91×) than small ones (~0.96×) → still some
-tensor-core feeding stalls. Likely next levers: deeper (3-stage) cp.async pipeline
-within the register budget, swizzled shared layout to kill `ldmatrix` bank
-conflicts, and a wider warp tile. Diminishing returns; matching cuBLAS on every
-shape is hard.
+### v9_stage3 — 3-stage cp.async pipeline — 0.8297× ↓↓ (regression, dead branch)
+PTX route. v8 + a 3rd in-flight K-tile (deeper prefetch) to hide global latency on
+big shapes. Needs 60KB shared (>48KB static cap) → moved As/Bs to dynamic shared →
+**1 block/SM, occupancy collapses**. All shapes drop uniformly to ~0.81–0.87 (vs v8's
+0.96 small / 0.91 big) — the occupancy loss swamps the prefetch gain. **Same wall as
+v5's BK=64.** Correct, but a clear regression. **Lesson (→ skill card):** on sm_120,
+deeper pipeline / bigger shared trades occupancy for reuse and *loses*; the next
+lever must be **occupancy-neutral** (swizzle, register reduction), not more shared.
+
+### v10_nopad — drop the BK padding (BKP 40→32) — 0.8997× ↓ (regression)
+PTX route, occupancy probe. Less shared (32KB → maybe 3 blocks/SM), but no padding
+reintroduces `ldmatrix` bank conflicts that cost MORE than the occupancy gained
+(all shapes drop ~3pp). **Lesson:** the `+8` pad is doing real work on the raw-PTX
+path too — you can't just shrink shared for occupancy.
+
+### v11_smalltile — 128×64 tile + 3-stage pipeline — 0.6954× ↓↓↓ (worst)
+PTX route. An **independent fresh-context reviewer's top pick**: shrink the block so
+`acc[4][2]`=32 regs and a 3-stage pipeline fits at 2 blocks/SM. Predicted 0.93–0.95×.
+Benched **0.70×** — the smaller N-tile crushed **arithmetic intensity** (B re-loaded
+by far more blocks), which dominates the occupancy gain. v3/v5's "bigger tile = more
+reuse" holds here. **Meta-lesson:** even a clean independent reviewer's confident
+prediction was wrong by data — predictions (author's *or* reviewer's) are cheap;
+okbench is the only truth.
+
+### v12_stmatrix — coalesced `stmatrix` epilogue — 0.9598× (198.6) ← champion
+PTX route. Replaces v8's scalar per-thread C stores (scattered → uncoalesced) with
+`stmatrix`: pack acc → shared in mma-fragment layout, then a **contiguous**
+shared→global copy = coalesced C writes. Picked from `menu/warp-matrix-mma.md` as
+the survey→use→distill loop's verify target (was stmatrix even on sm_120? **yes**).
+Correct on the **first** bench, +3.5pp over v8 — the epilogue wasn't "neutral"
+because C-write bandwidth is a real slice on large outputs (square_8192 C=128MB);
+square_4096 hit **0.9978×** (≈ cuBLAS). Banked as fact
+`../../wiki/ptx/facts/stmatrix.md` + heuristic
+`../../wiki/ptx/heuristics/epilogue-coalescing.md`. β≠0 keeps a scalar fallback
+(okbench scores β=0).
+
+### v13_swizzle — XOR-swizzled shared, no pad — 0.9900× (205 TFLOPS) ← champion, beats cuBLAS on square
+PTX route. v12 + the **missing half of v10**: drop the `+8` pad (shared 40→32KB =
+more occupancy) AND remove the resulting `ldmatrix` bank conflicts with an **XOR
+swizzle** (`phys_chunk = chunk ^ (row & 3)`), applied **identically** in the
+cp.async store and the ldmatrix load. Correct on the **first** bench; +3pp over v12
+and **square_4096 = 1.0257× — over cuBLAS.** Resolves the long-standing "untried
+swizzle lever (maybe 3–8%, unbenched)" — it was real. The swizzle is the occupancy-
+neutral conflict cure v9 (occupancy) and v10 (conflicts) each only got half of.
+Banked: `../../wiki/ptx/facts/smem-swizzle.md` (exact working swz + the must-match
+gotcha) + updated `../../wiki/ptx/heuristics/padding-vs-swizzle.md`.
+
+### v14_raster — L2 threadblock rasterization — 0.9716× ↓ (regression, dead branch on sm_120)
+PTX route. v13 + remap linear bid → GROUP-tall column strips so concurrent CTAs
+share B columns in L2 (classic CUTLASS trick). Swept GROUP ∈ {4,8,16,32}: **all
+regress** (0.968–0.972×). Regressed *uniformly incl. compute-bound square_4096*
+(1.0257→1.0062) → the drop is **pure remap overhead**, the L2-reuse benefit is
+absent: the 5090's large L2 already captures the reuse rasterization exists to
+force. **Lesson (→ `../../wiki/ptx/heuristics/block-rasterization-vs-l2.md`):** don't
+port CUTLASS-era scheduling tricks to a big-L2 consumer arch on faith. v13 stays
+champion.
+
+### v15_stage3sw — 3-stage pipeline on the swizzled base — 0.8371× ↓↓ (regression, confirms v9)
+PTX route. The hypothesis: v9's 3-stage died from v8's *padded* 60KB tiles (→1
+block/SM); v13's swizzle cut tiles to 32KB, so 3 stages = 48KB dynamic + 2KB Cs =
+50KB should keep 2 blocks/SM. **Benched 0.8371×** — same ~16pp collapse as v9, all
+shapes (square_4096 1.0257→0.8814). So removing the padding confound did **not**
+save it: deep prefetch is genuinely wrong for this compute-bound large-shape GEMM on
+sm_120, not merely "too much shared." Strengthens
+`../../wiki/ptx/heuristics/pipeline-depth-vs-occupancy.md`. **v13 is the final
+champion.**
+
+### The tile/pipeline levers stay regime-conditional (v9/v10/v11/v14/v15 are not "failed")
+`required_5` is **entirely large, big-K matrices** — a biased sample that rewards
+big tiles + shallow pipelines. v12's win was orthogonal (epilogue, not the inner
+loop); the *tile/pipeline* branches still lose here, each for a mechanism that
+predicts where it would *win*:
+
+- **v9** (+shared → occupancy cliff) — loses on big-shared-bound shapes; deep
+  pipelines win when **latency-bound** or on big-shared archs (Hopper/TMA).
+- **v10** (−pad → bank conflicts) — the conflict cure that's occupancy-neutral is
+  **XOR swizzle**, not just dropping the pad.
+- **v11** (−tile → arithmetic-intensity collapse) — small tiles win on **skinny /
+  small / batched** GEMMs, the regime okbench doesn't sample.
+
+These three lessons are banked as **regime→technique heuristic cards**, not verdicts:
+- `../../wiki/ptx/heuristics/tile-size-vs-shape.md`
+- `../../wiki/ptx/heuristics/pipeline-depth-vs-occupancy.md`
+- `../../wiki/ptx/heuristics/padding-vs-swizzle.md`
+
+On *this* shape set the dominant force for the inner loop is **arithmetic intensity
+/ reuse**, and v8/v12's 128×128 padded double-buffer balances it. The one untried
+inner-loop lever that keeps the tile is a **proper XOR swizzle** (occupancy-neutral;
+maybe 3–8%, unbenched). cuBLAS's last ~4% is hand-tuned SASS. **Meta-lesson:** every
+confident prediction here — author's *and* an independent reviewer's — was falsified
+by data at least once (v11 predicted 0.93×, got 0.70×; v12's epilogue predicted
+"neutral", got +3.5pp). okbench is the only arbiter, and a "winner" is always
+*winner-for-this-distribution*.

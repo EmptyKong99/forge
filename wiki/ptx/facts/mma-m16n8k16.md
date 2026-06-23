@@ -35,3 +35,11 @@ fast but is numerically wrong. Rule:
 `mma.sync` / `ldmatrix` / `cp.async` are **sm_80+** → valid on sm_120 (consumer
 Blackwell uses this Ampere/Ada-style path, *not* sm_90 `wgmma` or sm_100
 `tcgen05`). Confirm any instruction against the PTX ISA §9.7 SM-support table.
+
+## Cross-refs
+- fact: `ldmatrix-family.md` (how A/B fragments load), `cp-async.md` (how tiles
+  reach shared)
+- menu: `../menu/warp-matrix-mma.md` (the full mma shape/type space this is one
+  point in)
+- heuristics: `../heuristics/tile-size-vs-shape.md`,
+  `../heuristics/pipeline-depth-vs-occupancy.md`, `../heuristics/padding-vs-swizzle.md`
